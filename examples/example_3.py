@@ -38,7 +38,7 @@ if __name__ == "__main__":
     temperature_data = get_temperature_data(
         retries=5,
         delay=2,
-        exceptions={SensorError: lambda e: RETRY_EVENT},
+        exceptions={SensorError: RETRY_EVENT},
         opts={-1: handle_low_temperature, 1: handle_high_temperature},
         opts_criteria=lambda temp: -1 if temp < 0 else 1 if temp > 30 else 0,
         on_retry=lambda tries: print(f"Retry {tries}")

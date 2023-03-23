@@ -30,7 +30,7 @@ async def main():
         "you@example.com", "recipient@example.com", "Subject", "Message body", 
         retries=3,
         delay=5,
-        exceptions={"all": lambda e: handle_send_error}
+        exceptions={"all": handle_send_error}
     )
 
 if __name__ == "__main__":

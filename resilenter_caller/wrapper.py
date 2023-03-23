@@ -10,18 +10,19 @@ RETRY_EVENT = object()
 
 def with_retry() -> object:
     """
+    # Resilienter Caller
     Decorator to retry a function on failure.
 
     Args:
-        opts (dict, optional): A dictionary of options. Defaults to None.
-        opts_criteria (function, optional): A function that returns the criteria to use for the options. Defaults to None.
-        exceptions (dict, optional): A dictionary of exceptions. Defaults to None.
-        retries (int, optional): Number of retries. Defaults to False.
-        delay (int, optional): Delay between retries. Defaults to 0.
-        on_retry (function, optional): A function to call on each retry. Defaults to None.
+        `opts` (dict, optional): A dictionary of options. Defaults to None.
+        `opts_criteria` (function, optional): A function that returns the criteria to use for the `opts`. Defaults to None.
+        `exceptions` (dict, optional): A dictionary of exceptions. Defaults to None.
+        `retries` (int, optional): Number of retries. Defaults to False.
+        `delay` (int, optional): Delay between retries. Defaults to 0.
+        `on_retry` (function, optional): A function to call on each retry. Defaults to None.
 
     Returns:
-        object: The decorated function.
+        `object`: The decorated function.
     
     Example:
         >>> from requests import Response, request
@@ -42,7 +43,6 @@ def with_retry() -> object:
                 on_retry=lambda tries: print(f"Retry {tries}",
                 opts={200: lambda r: r.status_code, 500: lambda r: RETRY_EVENT, 403: example_custom_retry_403}})
         >>> )
-        ```
     """
     def decorator(f: object) -> object:
         if iscoroutinefunction(f):
@@ -83,6 +83,10 @@ def with_retry() -> object:
                         if exceptions:
                             action = exceptions.get(type(e), None)
                             if action or "all" in exceptions:
+                                if action == RETRY_EVENT or (not action and "all" in exceptions and exceptions["all"] == RETRY_EVENT):
+                                    logger.debug(f"Got retry event from exception {type(e).__name__}")
+                                    tries += 1
+                                    continue
                                 result = await action(e) if action else await exceptions["all"](e)
                                 if result == RETRY_EVENT:
                                     logger.debug(f"Got retry event ({result}) from exception {type(e).__name__}")
@@ -119,6 +123,10 @@ def with_retry() -> object:
                             criteria = opts_base(response) if opts_base else response
                             action = opts.get(criteria, None)
                             if action:
+                                if action == RETRY_EVENT:
+                                    logger.debug(f"Got retry event ({action})")
+                                    tries += 1
+                                    continue
                                 result = action(response)
                                 if result == RETRY_EVENT:
                                     logger.debug(f"Got retry event ({result})")
@@ -132,6 +140,10 @@ def with_retry() -> object:
                         if exceptions:
                             action = exceptions.get(type(e), None)
                             if action or "all" in exceptions:
+                                if action == RETRY_EVENT or (not action and "all" in exceptions and exceptions["all"] == RETRY_EVENT):
+                                    logger.debug(f"Got retry event from exception {type(e).__name__}")
+                                    tries += 1
+                                    continue
                                 result = action(e) if action else exceptions["all"](e)
                                 if result == RETRY_EVENT:
                                     logger.debug(f"Got retry event ({result}) from exception {type(e).__name__}")
