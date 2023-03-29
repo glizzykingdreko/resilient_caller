@@ -1,14 +1,14 @@
 '''
 Example 2: Asynchronous email sending with retry
 
-In this example, we will use the with_retry() decorator to implement an asynchronous 
+In this example, we will use the resilient_call() decorator to implement an asynchronous 
 function that sends an email and retries with a delay and a log message in case of failure.
 '''
 import aiosmtplib, asyncio
 from email.message import EmailMessage
-from resilenter_caller import with_retry, RETRY_EVENT
+from resilenter_caller import resilient_call, RETRY_EVENT
 
-@with_retry()
+@resilient_call()
 async def async_send_email(from_addr, to_addr, subject, body):
     message = EmailMessage()
     message.set_content(body)

@@ -2,12 +2,12 @@
 
 A Python package that provides a customizable wrapper to retry function calls with custom logic. This package was developed to address the need for executing numerous requests with similar, yet slightly different, exception handling. The wrapper reduces the need to write multiple while loops and try/except blocks for each request.
 
-The wrapper can be implemented for any function, not just requests-related functions. The module also includes a Python requests implementation with auto proxy formatting from string. Async functions support aswell.
+The wrapper can be implemented for any function, not just requests-related functions. The module also includes a Python requests implementation with auto proxy formatting from a string, by simply passing the proxy as a string to the send_request function. Async functions support as well.
 
 The resilient caller supports the following keyword arguments (kwargs) for the wrapper. Note that these kwargs will not be passed to the wrapped function:
 
-- `opts`: A dictionary specifying the actions to take for a given outcome.
-- `opts_criteria`: The criteria to use when checking the `opts`.
+- `conditions`: A dictionary specifying the actions to take for a given outcome.
+- `conditions_criteria`: The criteria to use when checking the `conditions`.
 - `exceptions`: A dictionary specifying the actions to take for a given exception or 'all' for non-handled or all exceptions.
 - `retries`: The maximum number of times to retry the function (disabled by default).
 - `delay`: The number of seconds to sleep between retries.
@@ -25,13 +25,13 @@ pip install resilient_caller
 ## Examples
 
 ### Quick simple and easy web scraping monitor
-In this example, we will create a `SimpleScraper` class that monitors [glizzykingdreko's medium blog](https://medium.com/@glizzykingdreko) for new articles. By defining the start method with the `@with_retry()` decorator and passing `delay=5` and `exceptions={"all": RETRY_EVENT}` when calling it, we ensure that the scraper handles all exceptions with a retry and adds a delay of 5 seconds between each request.
+In this example, we will create a `SimpleScraper` class that monitors [glizzykingdreko's medium blog](https://medium.com/@glizzykingdreko) for new articles. By defining the start method with the `@resilient_call()` decorator and passing `delay=5` and `exceptions={"all": RETRY_EVENT}` when calling it, we ensure that the scraper handles all exceptions with a retry and adds a delay of 5 seconds between each request.
 ```python
 from bs4 import BeautifulSoup
 from requests import Session
 from typing import List
 from time import sleep
-from resilenter_caller import with_retry, RETRY_EVENT
+from resilenter_caller import resilient_call, RETRY_EVENT
 
 class SimpleScraper:
     def __init__(self):
@@ -40,7 +40,7 @@ class SimpleScraper:
         # and handling any exception with a retry event.
         self.start(delay=5, exceptions={"all": RETRY_EVENT})
 
-    @with_retry()
+    @resilient_call()
     def start(self) -> None:
         data = self.load_api_data()
         self.load_response_details(data)
@@ -98,20 +98,20 @@ if __name__ == "__main__":
         "https://www.example.com",
         retries=3,
         delay=2,
-        opts={200: handle_success, 404: handle_not_found, 500: handle_server_error},
+        conditions={200: handle_success, 404: handle_not_found, 500: handle_server_error},
         exceptions={"all": handle_all_exceptions},
         on_retry=lambda tries: print(f"Retry {tries}")
     )
 ```
 
 ### File processing with retry and custom handling
-In this example, we will use the with_retry() decorator to implement a function 
+In this example, we will use the resilient_call() decorator to implement a function 
 that processes a file and retries the operation in case of failure. We will also 
 use all the available options to customize the handling of different file sizes.
 
 ```python
 import os
-from resilenter_caller import with_retry, RETRY_EVENT
+from resilenter_caller import resilient_call, RETRY_EVENT
 
 def process_large_file(file_path):
     print(f"Processing large file: {file_path}")
@@ -125,7 +125,7 @@ def process_valid_file(file_path):
     print(f"Processing valid file: {file_path}")
     return file_path
 
-@with_retry()
+@resilient_call()
 def process_file(file_path):
     file_size = os.path.getsize(file_path)
     return file_size
@@ -135,24 +135,24 @@ if __name__ == "__main__":
         "example.txt",
         retries=5,
         delay=2,
-        opts={-1: process_large_file, 1: process_small_file},
-        opts_criteria=lambda file_size: -1 if file_size > 1000000 else 1 if file_size < 1000 else 0,
+        conditions={-1: process_large_file, 1: process_small_file},
+        conditions_criteria=lambda file_size: -1 if file_size > 1000000 else 1 if file_size < 1000 else 0,
         on_retry=lambda tries: print(f"Retry {tries}")
     )
 ```
 
 ### Asynchronous API call with rate limiting retry
-In this example, we will use the with_retry() decorator to implement an 
+In this example, we will use the resilient_call() decorator to implement an 
 asynchronous function that makes an API call and retries the call in case of failure or rate limiting.
 ```python
 import aiohttp, asyncio
-from resilenter_caller import with_retry, RETRY_EVENT
+from resilenter_caller import resilient_call, RETRY_EVENT
 
 async def handle_rate_limit(e):
     print(f"Rate limited: {e}")
     return RETRY_EVENT
 
-@with_retry()
+@resilient_call()
 async def async_api_call(url):
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
@@ -173,9 +173,86 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Custom backoff strategy (exponential backoff)
+In this example, we will create a function that will randomly fail with a 30% chance.
+If it fails, we will retry the function with an exponential backoff strategy.
+```python
+import logging
+import random
+from resilenter_caller import resilient_call, RETRY_EVENT
+
+# Set level as debug to get full logs
+logging.basicConfig(level=logging.DEBUG)
+
+def exponential_backoff(tries):
+    return 2 ** (tries - 1) + random.uniform(0, 1)
+
+# If 2 arguments are passed to an exception function
+# the second argument will be the number of tries
+# (same thing for a condition)
+def print_exception(exception, tries):
+    print(f"Exception: {exception} (try {tries})")
+    return RETRY_EVENT
+
+@resilient_call()
+def example_function():
+    random_num = random.random()
+    if random_num < 0.7:
+        print("Failed, retrying...")
+        raise ValueError("Random number too low")
+    else:
+        print("Success!")
+        return "Successful response"
+
+if __name__ == '__main__':
+    result = example_function(
+        retries=5, 
+        on_retry=exponential_backoff,
+        exceptions={ValueError: print_exception}
+    )
+    print("Result:", result)
+```
+
+### Pass the number of tries to the action function
+In this example, by using a function that takes 2 arguments, we 
+can pass the number of tries to the action function.
+```python
+import random
+from resilenter_caller import resilient_call, RETRY_EVENT
+
+def some_condition(response):
+    return response == "Retry"
+
+def handle_response(response, tries):
+    if tries < 3 and some_condition(response):
+        return RETRY_EVENT
+    else:
+        return response
+
+# We set the max execution time to 10 seconds
+@resilient_call(max_elapsed_time=10)
+def example_function():
+    random_num = random.random()
+    if random_num < 0.6:
+        print("Returning 'Retry'")
+        return "Retry"
+    else:
+        print("Success!")
+        return "Successful response"
+
+if __name__ == '__main__':
+    result = example_function(
+        # With 'all' we can handle all the
+        # possible responses or exceptions
+        conditions={'all': handle_response},
+    )
+    print("Result:", result)
+```
+These examples demonstrate the versatility and usefulness of the Resilient Caller module. This module can be applied to a wide range of use cases, from web scraping and file processing to API calls and custom backoff strategies. Make sure to explore the examples folder in the repository for even more examples and use cases with other parameters and configurations.
+
 ## Personal Thoughts
 
-I hope this module will help many developers save time and make their code more efficient. Please feel free to contact me for any help or suggestions via [Email](mailto:glizzykingdreko@protonmail.com) or [Twitter](https://mobile.twitter.com/glizzykingdreko). I appreciate your feedback and contributions to the project.
+I hope this module will help many developers save time and make their code more efficient. Please feel free to contact me for any help or suggestions via [Email](mailto:glizzykingdreko@protonmail.com) or [Twitter](https://mobile.twitter.com/glizzykingdreko). Don't forget to follow me on GitHub and Medium for more exciting content and updates. I appreciate your feedback and contributions to the project.
 
 ## Contributing
 I welcome contributions to the Resilient Caller project! To contribute, please follow these steps:

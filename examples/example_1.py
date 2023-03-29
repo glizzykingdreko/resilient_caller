@@ -32,7 +32,8 @@ if __name__ == "__main__":
         "https://www.example.com",
         retries=3,
         delay=2,
-        opts={200: handle_success, 404: handle_not_found, 500: handle_server_error},
+        conditions_criteria=lambda res: res.status_code,
+        conditions={200: handle_success, 404: handle_not_found, 500: handle_server_error},
         exceptions={"all": handle_all_exceptions},
         on_retry=lambda tries: print(f"Retry {tries}")
     )

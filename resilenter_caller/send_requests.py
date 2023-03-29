@@ -1,21 +1,20 @@
-from .wrapper import RETRY_EVENT, with_retry
+from .wrapper import RETRY_EVENT, resilient_call
 from .utils import update_session_proxy
 from requests import Session, Response
 
-@with_retry()
-def send_request(url, *args, **kwargs) -> Response:
+@resilient_call()
+def send_request(url, *args, method="GET", session=None, proxies=None, **kwargs) -> Response:
     """Sends an HTTP request to the specified URL and retries on failure.
     
     Returns:
         Response: The response object returned by the `requests` function.
     """
-    method = kwargs.get("method", "GET")
-    if not kwargs.get("session", None): session = Session()
-    kwargs.pop("session", None)
-    if kwargs.get("proxies", None):
+    if session is None:
+        session = Session()
+
+    if proxies:
         # Automatically format the proxies in the correct format for the session
         # from a string input or directly pass a dictionary
-        update_session_proxy(kwargs.get("proxies"))
-        kwargs.pop("proxies")
-    return session.request(method, url, *args, **kwargs)
+        update_session_proxy(proxies)
 
+    return session.request(method, url, *args, **kwargs)

@@ -36,5 +36,5 @@ if __name__ == "__main__":
         exceptions={ProxyError: handle_proxy_error, RequestException: handle_request_exception},
         on_retry=lambda tries: print(f"Retry {tries}")
     )
-
-    print(response.json())
+    if response:
+        print(response.json())

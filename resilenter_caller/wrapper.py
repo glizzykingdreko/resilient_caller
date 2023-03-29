@@ -1,159 +1,104 @@
-import functools 
+import functools
 import logging
-from time import sleep
-from asyncio import iscoroutinefunction, sleep as async_sleep
-
+import asyncio
+from time import time
 from .exceptions import UnhandledException
 
 logger = logging.getLogger(__name__)
 RETRY_EVENT = object()
 
-def with_retry() -> object:
-    """
-    # Resilienter Caller
-    Decorator to retry a function on failure.
+def with_retry(max_elapsed_time=None, backoff_strategy=None):
+    def decorator(f):
+        @functools.wraps(f)
+        async def async_wrapper(*args, **kwargs):
+            config = {
+                "conditions": kwargs.pop("conditions", None),
+                "conditions_criteria": kwargs.pop("conditions_criteria", None),
+                "exceptions": kwargs.pop("exceptions", None),
+                "retries": kwargs.pop("retries", False),
+                "delay": kwargs.pop("delay", 0),
+                "on_retry": kwargs.pop("on_retry", None),
+            }
 
-    Args:
-        `opts` (dict, optional): A dictionary of options. Defaults to None.
-        `opts_criteria` (function, optional): A function that returns the criteria to use for the `opts`. Defaults to None.
-        `exceptions` (dict, optional): A dictionary of exceptions. Defaults to None.
-        `retries` (int, optional): Number of retries. Defaults to False.
-        `delay` (int, optional): Delay between retries. Defaults to 0.
-        `on_retry` (function, optional): A function to call on each retry. Defaults to None.
+            async def run_action(action, response):
+                if callable(action):
+                    num_args = action.__code__.co_argcount
+                    if asyncio.iscoroutinefunction(action):
+                        if num_args == 2:
+                            return await action(response, tries)
+                        else:
+                            return await action(response)
+                    else:
+                        if num_args == 2:
+                            return action(response, tries)
+                        else:
+                            return action(response)
+                return action
 
-    Returns:
-        `object`: The decorated function.
-    
-    Example:
-        >>> from requests import Response, request
-        >>> from resilenter_caller import retry
-        >>> 
-        >>> @retry()
-        >>> def send_request(url, method: str="GET", *args, **kwargs) -> Response:
-        >>>     '''Sends an HTTP request to the specified URL and retries on failure.'''
-        >>>     return request(method, url, *args, **kwargs)
-        >>>
-        >>> def example_custom_retry_403(response: Response) -> Response:
-                print(f"Got response {response.status_code}")
-                ...
-                return RETRY_EVENT
-        >>>
-        >>> send_request(
-                "https://www.google.com", retries=3, delay=5, 
-                on_retry=lambda tries: print(f"Retry {tries}",
-                opts={200: lambda r: r.status_code, 500: lambda r: RETRY_EVENT, 403: example_custom_retry_403}})
-        >>> )
-    """
-    def decorator(f: object) -> object:
-        if iscoroutinefunction(f):
-            async def async_wrapper(*args, **kwargs) -> object:
-                # Async wrapper logic
-                opts, opts_base, exceptions, retries, delay, on_retry = kwargs.get("opts", None), kwargs.get("opts_criteria", None), \
-                    kwargs.get("exceptions", None), kwargs.get("retries", False), kwargs.get("delay", 0), kwargs.get("on_retry", None)
-                kwargs.pop("opts", None), kwargs.pop("opts_criteria", None), kwargs.pop("exceptions", None), kwargs.pop("retries", None), \
-                    kwargs.pop("delay", None), kwargs.pop("on_retry", None)
-                tries = 0
-                while 1:
-                    if retries and tries >= retries:
-                        logger.error(f"Max retries reached for function {f.__name__}")
-                        return None
-                    elif tries > 0:
-                        if on_retry: on_retry(tries)
-                        logger.debug(f"Waiting {delay} seconds before retrying")
-                        await async_sleep(delay)
-                    try:
-                        logger.debug(f"Executing function {f.__name__}")
+            tries, start_time = 0, time()
+            while 1:
+                if max_elapsed_time and (time() - start_time) > max_elapsed_time:
+                    logger.error(f"Max elapsed time reached for function {f.__name__}")
+                    return None
+                
+                if config["retries"] and tries >= config["retries"]:
+                    logger.error(f"Max retries reached for function {f.__name__}")
+                    return None
+
+                if tries > 0:
+                    if config["on_retry"]:
+                        config["on_retry"](tries)
+                    logger.debug(f"Waiting {config['delay']} seconds before retrying")
+                    await asyncio.sleep(config["delay"])
+                    if backoff_strategy:
+                        config["delay"] = backoff_strategy(tries)
+                try:
+                    logger.debug(f"Executing function {f.__name__}")
+                    if asyncio.iscoroutinefunction(f):
                         response = await f(*args, **kwargs)
-                        logger.debug(f"Got response ({response})") 
-                        
-                        if opts:
-                            criteria = await opts_base(response) if opts_base else response
-                            action = opts.get(criteria, None)
-                            if action:
-                                result = action(response)
-                                if result == RETRY_EVENT:
-                                    logger.debug(f"Got retry event ({result})")
-                                    tries += 1
-                                    continue
-                                else:
-                                    logger.debug(f"Got result ({result})")
-                                    return result
-                        return response
-                    except Exception as e:
-                        if exceptions:
-                            action = exceptions.get(type(e), None)
-                            if action or "all" in exceptions:
-                                if action == RETRY_EVENT or (not action and "all" in exceptions and exceptions["all"] == RETRY_EVENT):
-                                    logger.debug(f"Got retry event from exception {type(e).__name__}")
-                                    tries += 1
-                                    continue
-                                result = await action(e) if action else await exceptions["all"](e)
-                                if result == RETRY_EVENT:
-                                    logger.debug(f"Got retry event ({result}) from exception {type(e).__name__}")
-                                    tries += 1
-                                    continue
-                                else:
-                                    logger.debug(f"Got result ({result}) from exception {type(e).__name__}")
-                                    return result 
-                        logger.error(f"Unhandled exception {type(e).__name__} ({e})")
-                        raise UnhandledException(e)
+                    else:
+                        response = await asyncio.to_thread(f, *args, **kwargs)
+                    logger.debug(f"Got response ({response})")
+
+                    if config["conditions"]:
+                        criteria = config["conditions_criteria"](response) if config["conditions_criteria"] else response
+                        action = config["conditions"].get(criteria, None) or config["conditions"].get("all", None)
+                        if action:
+                            result = await run_action(action, response)
+                            if result == RETRY_EVENT:
+                                logger.debug(f"Got retry event ({result})")
+                                tries += 1
+                                continue
+                            else:
+                                logger.debug(f"Got result ({result})")
+                                return result
+                    return response
+
+                except Exception as e:
+                    if config["exceptions"]:
+                        action = config["exceptions"].get(type(e), None) or config["exceptions"].get("all", None)
+                        if action:
+                            result = await run_action(action, e)
+                            if result == RETRY_EVENT:
+                                logger.debug(f"Got retry event ({result}) from exception {type(e).__name__}")
+                                tries += 1
+                                continue
+                            else:
+                                logger.debug(f"Got result ({result}) from exception {type(e).__name__}")
+                                return result
+
+                    logger.error(f"Unhandled exception {type(e).__name__} ({e})")
+                    raise UnhandledException(e)
+
+        if asyncio.iscoroutinefunction(f):
             return async_wrapper
         else:
-            def wrapper(*args, **kwargs) -> object:
-                # Sync wrapper logic
-                opts, opts_base, exceptions, retries, delay, on_retry = kwargs.get("opts", None), kwargs.get("opts_criteria", None), \
-                    kwargs.get("exceptions", None), kwargs.get("retries", False), kwargs.get("delay", 0), kwargs.get("on_retry", None)
-                kwargs.pop("opts", None), kwargs.pop("opts_criteria", None), kwargs.pop("exceptions", None), kwargs.pop("retries", None), \
-                    kwargs.pop("delay", None), kwargs.pop("on_retry", None)
-                tries = 0
-                while 1:
-                    if retries and tries >= retries:
-                        logger.error(f"Max retries reached for function {f.__name__}")
-                        return None
-                    elif tries > 0:
-                        if on_retry: on_retry(tries)
-                        logger.debug(f"Waiting {delay} seconds before retrying")
-                        sleep(delay)
-                    try:
-                        logger.debug(f"Executing function {f.__name__}")
-                        response = f(*args, **kwargs)
-                        logger.debug(f"Got response ({response})") 
-                        
-                        if opts:
-                            criteria = opts_base(response) if opts_base else response
-                            action = opts.get(criteria, None)
-                            if action:
-                                if action == RETRY_EVENT:
-                                    logger.debug(f"Got retry event ({action})")
-                                    tries += 1
-                                    continue
-                                result = action(response)
-                                if result == RETRY_EVENT:
-                                    logger.debug(f"Got retry event ({result})")
-                                    tries += 1
-                                    continue
-                                else:
-                                    logger.debug(f"Got result ({result})")
-                                    return result
-                        return response
-                    except Exception as e:
-                        if exceptions:
-                            action = exceptions.get(type(e), None)
-                            if action or "all" in exceptions:
-                                if action == RETRY_EVENT or (not action and "all" in exceptions and exceptions["all"] == RETRY_EVENT):
-                                    logger.debug(f"Got retry event from exception {type(e).__name__}")
-                                    tries += 1
-                                    continue
-                                result = action(e) if action else exceptions["all"](e)
-                                if result == RETRY_EVENT:
-                                    logger.debug(f"Got retry event ({result}) from exception {type(e).__name__}")
-                                    tries += 1
-                                    continue
-                                else:
-                                    logger.debug(f"Got result ({result}) from exception {type(e).__name__}")
-                                    return result 
-                        logger.error(f"Unhandled exception {type(e).__name__} ({e})")
-                        raise UnhandledException(e)
-            return functools.wraps(f)(wrapper)
-        
+            @functools.wraps(f)
+            def wrapper(*args, **kwargs):
+                return asyncio.run(async_wrapper(*args, **kwargs))
+
+            return wrapper
+
     return decorator
+
+resilient_call = with_retry
