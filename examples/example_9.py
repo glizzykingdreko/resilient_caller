@@ -5,7 +5,7 @@ In this example, by using a function that takes 2 arguments, we
 can pass the number of tries to the action function.
 '''
 import random
-from resilenter_caller import resilient_call, RETRY_EVENT
+from resilient_caller import resilient_call, RETRY_EVENT
 
 def some_condition(response):
     return response == "Retry"

@@ -6,7 +6,7 @@ function that sends an email and retries with a delay and a log message in case 
 '''
 import aiosmtplib, asyncio
 from email.message import EmailMessage
-from resilenter_caller import resilient_call, RETRY_EVENT
+from resilient_caller import resilient_call, RETRY_EVENT
 
 @resilient_call()
 async def async_send_email(from_addr, to_addr, subject, body):

@@ -6,7 +6,7 @@ web scraping. We will also use all the available options to customize the handli
 different HTTP response codes and handle all exceptions.
 '''
 from bs4 import BeautifulSoup
-from resilenter_caller import send_request, RETRY_EVENT
+from resilient_caller import send_request, RETRY_EVENT
 
 def handle_success(response):
     print(f"Request successful, status code: {response.status_code}")

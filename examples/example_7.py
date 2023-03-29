@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from requests import Session
 from typing import List
 from time import sleep
-from resilenter_caller import resilient_call, RETRY_EVENT
+from resilient_caller import resilient_call, RETRY_EVENT
 
 class SimpleScraper:
     def __init__(self):

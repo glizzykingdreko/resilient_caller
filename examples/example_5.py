@@ -7,8 +7,8 @@ We will also handle connection and proxy errors.
 '''
 from requests import Session
 from requests.exceptions import ProxyError, RequestException
-from resilenter_caller import send_request, RETRY_EVENT
-from resilenter_caller.utils import update_session_proxy
+from resilient_caller import send_request, RETRY_EVENT
+from resilient_caller.utils import update_session_proxy
 
 def handle_proxy_error(exception):
     print(f"A proxy error occurred: {exception}")

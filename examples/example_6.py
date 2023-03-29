@@ -5,7 +5,7 @@ In this example, we will use the resilient_call() decorator to implement an
 asynchronous function that makes an API call and retries the call in case of failure or rate limiting.
 '''
 import aiohttp, asyncio
-from resilenter_caller import resilient_call, RETRY_EVENT
+from resilient_caller import resilient_call, RETRY_EVENT
 
 async def handle_rate_limit(e):
     print(f"Rate limited: {e}")

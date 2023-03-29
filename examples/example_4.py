@@ -6,7 +6,7 @@ that processes a file and retries the operation in case of failure. We will also
 use all the available options to customize the handling of different file sizes.
 '''
 import os
-from resilenter_caller import resilient_call, RETRY_EVENT
+from resilient_caller import resilient_call, RETRY_EVENT
 
 def process_large_file(file_path):
     print(f"Processing large file: {file_path}")

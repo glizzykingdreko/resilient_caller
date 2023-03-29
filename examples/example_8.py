@@ -6,7 +6,7 @@ If it fails, we will retry the function with an exponential backoff strategy.
 '''
 import logging
 import random
-from resilenter_caller import resilient_call, RETRY_EVENT
+from resilient_caller import resilient_call, RETRY_EVENT
 
 # Set level as debug to get full logs
 logging.basicConfig(level=logging.DEBUG)

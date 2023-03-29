@@ -6,7 +6,7 @@ the temperature from a sensor and retries the read operation in case of failure.
 all the available options to customize the handling of different temperature values.
 '''
 import random
-from resilenter_caller import resilient_call, RETRY_EVENT
+from resilient_caller import resilient_call, RETRY_EVENT
 
 class SensorError(Exception):
     pass
