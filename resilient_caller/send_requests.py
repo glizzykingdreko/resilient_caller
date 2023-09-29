@@ -15,6 +15,6 @@ def send_request(url, *args, method="GET", session=None, proxies=None, **kwargs)
     if proxies:
         # Automatically format the proxies in the correct format for the session
         # from a string input or directly pass a dictionary
-        update_session_proxy(proxies)
+        update_session_proxy(session, proxies)
 
     return session.request(method, url, *args, **kwargs)

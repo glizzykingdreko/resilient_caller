@@ -76,6 +76,9 @@ def with_retry(max_elapsed_time=None, backoff_strategy=None):
 
                 except Exception as e:
                     if config["exceptions"]:
+                        if config["exceptions"].get("raise", False):
+                            logger.debug(f"Got raise event from exception {type(e).__name__} because of config")
+                            raise e
                         action = config["exceptions"].get(type(e), None) or config["exceptions"].get("all", None)
                         if action:
                             result = await run_action(action, e)

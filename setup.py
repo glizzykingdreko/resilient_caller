@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="resilient_caller",
-    version="0.2.1",
+    version="0.2.2",
     author="glizzykingdreko",
     author_email="glizzykingdreko@protonmail.com",
     description="A Python package to retry function calls with custom logic and handling.",
